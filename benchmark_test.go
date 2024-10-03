@@ -42,16 +42,21 @@ func generateData(count int) ([]string, [][]byte) {
 }
 
 func benchmarkBuntDB(b *testing.B, keys []string, values [][]byte) {
-	//	db, err := buntdb.Open(":memory:")
 	db, err := buntdb.Open(buntDbPath)
 	if err != nil {
 		b.Fatal(err)
+	}
+	if err := db.SetConfig(buntdb.Config{
+		SyncPolicy: buntdb.Always,
+	}); err != nil {
+
 	}
 	defer func() {
 		_ = db.Close()
 		_ = os.RemoveAll(buntDbPath)
 	}()
 
+	var lastIdx int
 	b.Run("BuntDB-Set", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			idx := i % len(keys)
@@ -62,12 +67,13 @@ func benchmarkBuntDB(b *testing.B, keys []string, values [][]byte) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			lastIdx = idx
 		}
 	})
 
 	b.Run("BuntDB-Get", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			idx := i % len(keys)
+			idx := i % lastIdx
 			err := db.View(func(tx *buntdb.Tx) error {
 				_, err := tx.Get(keys[idx])
 				return err
@@ -90,6 +96,7 @@ func benchmarkBadgerDB(b *testing.B, keys []string, values [][]byte) {
 	}
 
 	opts := badger.DefaultOptions(badgerDbPath)
+	opts.SyncWrites = true
 	opts.Logger = newBadgerLogger(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError})))
 
 	db, err := badger.Open(opts)
@@ -101,6 +108,7 @@ func benchmarkBadgerDB(b *testing.B, keys []string, values [][]byte) {
 		_ = os.RemoveAll(badgerDbPath)
 	}()
 
+	var lastIdx int
 	b.Run("BadgerDB-Set", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			idx := i % len(keys)
@@ -110,12 +118,13 @@ func benchmarkBadgerDB(b *testing.B, keys []string, values [][]byte) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			lastIdx = idx
 		}
 	})
 
 	b.Run("BadgerDB-Get", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			idx := i % len(keys)
+			idx := i % lastIdx
 			err := db.View(func(txn *badger.Txn) error {
 				_, err := txn.Get([]byte(keys[idx]))
 				return err
@@ -137,7 +146,10 @@ func benchmarkBBolt(b *testing.B, keys []string, values [][]byte) {
 		}
 	}
 
-	db, err := bolt.Open(fmt.Sprintf(boltDbPath+"/db"), 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(fmt.Sprintf(boltDbPath+"/db"), 0600, &bolt.Options{
+		FreelistType: bolt.FreelistMapType,
+		Timeout:      1 * time.Second,
+	})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -154,6 +166,7 @@ func benchmarkBBolt(b *testing.B, keys []string, values [][]byte) {
 		b.Fatal(err)
 	}
 
+	var lastIdx int
 	b.Run("BBolt-Set", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			idx := i % len(keys)
@@ -164,12 +177,13 @@ func benchmarkBBolt(b *testing.B, keys []string, values [][]byte) {
 			if err != nil {
 				b.Fatal(err)
 			}
+			lastIdx = idx
 		}
 	})
 
 	b.Run("BBolt-Get", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			idx := i % len(keys)
+			idx := i % lastIdx
 			err := db.View(func(tx *bolt.Tx) error {
 				bucket := tx.Bucket([]byte(bucketName))
 				_ = bucket.Get([]byte(keys[idx]))
