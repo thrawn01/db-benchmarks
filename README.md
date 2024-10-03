@@ -1,5 +1,26 @@
-### Embedded Key/Value Stores
-Benchmarking some embedded key value stores.
+### Comparing Embedded Key/Value Stores
+Compare some embedded key value stores.
+
+### BuntDB
+I've have quite a few surprising problems with buntdb. 
+- The benchmark fails to GET a value that was set during a transaction
+  when using SyncAlways.
+- Panic from an unbounded index during development of Querator
+- The secondary indexes are useless unless you are serializing to JSON
+- I do not understand why the value storage is `string` instead of `[]byte` which
+  is what any marshalling library is going to provide, including standard JSON encoders
+- The entire btree is in memory, which means you have to be careful of the total database
+  size, else you will run out of memory.
+- The code is amazingly simple and easy to follow, very few dependencies.
+
+### BadgerDB
+- Has a ton of external dependencies, and the code is quite complex.
+- Based on some of the latest db research, is very fast read/write
+
+### BoltDB
+- Is based upon Btree+ which loads/unloads pages from disk at will
+- Uses a write ahead log
+- Is very slow compared to other implementations (8-10ms for a Set() operation)
 
 ### Results
 ```
